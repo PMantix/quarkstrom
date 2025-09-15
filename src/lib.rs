@@ -630,8 +630,12 @@ where
 
     let mut state = pollster::block_on(State::new(window));
     let mut input = WinitInputHelper::new();
+
     let mut renderer = R::new();
     let mut render_ctx = RenderContext::new();
+
+    // Track window minimization
+    let mut window_minimized = false;
 
     event_loop.run(move |event, _, control_flow| {
         if state.input(&event) {
@@ -654,36 +658,46 @@ where
                     ..
                 } => *control_flow = ControlFlow::Exit,
                 WindowEvent::Resized(physical_size) => {
-                    state.resize(*physical_size);
+                    window_minimized = physical_size.width == 0 || physical_size.height == 0;
+                    if !window_minimized {
+                        state.resize(*physical_size);
+                    }
                 }
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    state.resize(**new_inner_size);
+                    window_minimized = new_inner_size.width == 0 || new_inner_size.height == 0;
+                    if !window_minimized {
+                        state.resize(**new_inner_size);
+                    }
                 }
                 _ => {}
             },
             Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-                renderer.input(&input, state.view.x, state.view.y);
-                renderer.render(&mut render_ctx);
-                state.view.position = render_ctx.pos;
-                state.view.scale = render_ctx.scale;
-                state.set_instances(&render_ctx.circles);
-                state.set_vertices(&render_ctx.lines);
-                state.set_rects(&render_ctx.rects);
+                if !window_minimized {
+                    renderer.input(&input, state.view.x, state.view.y);
+                    renderer.render(&mut render_ctx);
+                    state.view.position = render_ctx.pos;
+                    state.view.scale = render_ctx.scale;
+                    state.set_instances(&render_ctx.circles);
+                    state.set_vertices(&render_ctx.lines);
+                    state.set_rects(&render_ctx.rects);
 
-                match state.render(&mut |ctx| renderer.gui(ctx)) {
-                    Ok(_) => {}
-                    // Reconfigure the surface if lost
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                    // The system is out of memory, we should probably quit
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    // All other errors (Outdated, Timeout) should be resolved by the next frame
-                    Err(e) => eprintln!("{:?}", e),
+                    match state.render(&mut |ctx| renderer.gui(ctx)) {
+                        Ok(_) => {}
+                        // Reconfigure the surface if lost
+                        Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                        // The system is out of memory, we should probably quit
+                        Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                        // All other errors (Outdated, Timeout) should be resolved by the next frame
+                        Err(e) => eprintln!("{:?}", e),
+                    }
                 }
             }
             Event::MainEventsCleared => {
                 // RedrawRequested will only trigger once, unless we manually
                 // request it.
-                state.window().request_redraw();
+                if !window_minimized {
+                    state.window().request_redraw();
+                }
             }
             _ => {}
         }
