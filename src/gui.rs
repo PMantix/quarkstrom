@@ -14,7 +14,8 @@ impl GuiHandler {
         device: &wgpu::Device,
     ) -> Self {
         let ctx = egui::Context::default();
-        let state = egui_winit::State::new(&window);
+        let mut state = egui_winit::State::new(&window);
+        state.set_pixels_per_point(window.scale_factor() as f32);
 
         let renderer = egui_wgpu::Renderer::new(device, format, None, 1);
 
