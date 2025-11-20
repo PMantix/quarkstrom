@@ -132,7 +132,11 @@ impl State {
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+            backends: if cfg!(target_os = "macos") {
+                wgpu::Backends::METAL
+            } else {
+                wgpu::Backends::VULKAN
+            },
             dx12_shader_compiler: Default::default(),
         });
 
@@ -151,10 +155,16 @@ impl State {
             .await
             .unwrap();
 
+        let supported_features = adapter.features();
+        let requested_features =
+            wgpu::Features::CONSERVATIVE_RASTERIZATION & supported_features;
+        let conservative_rasterization_enabled =
+            requested_features.contains(wgpu::Features::CONSERVATIVE_RASTERIZATION);
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::CONSERVATIVE_RASTERIZATION,
+                    features: requested_features,
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
                     limits: if cfg!(target_arch = "wasm32") {
@@ -262,7 +272,7 @@ impl State {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
                 front_face: wgpu::FrontFace::Ccw,
-                conservative: true,
+                conservative: conservative_rasterization_enabled,
                 ..Default::default()
             },
             depth_stencil: None,
@@ -347,7 +357,7 @@ impl State {
                     // Requires Features::DEPTH_CLIP_CONTROL
                     unclipped_depth: false,
                     // Requires Features::CONSERVATIVE_RASTERIZATION
-                    conservative: true,
+                    conservative: conservative_rasterization_enabled,
                 },
                 depth_stencil: None, // 1.
                 multisample: wgpu::MultisampleState {
