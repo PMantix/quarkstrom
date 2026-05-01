@@ -553,6 +553,7 @@ impl State {
 
 #[derive(Clone, Copy)]
 pub enum WindowMode {
+    Maximized,
     Windowed(u32, u32),
     Fullscreen,
 }
@@ -651,6 +652,9 @@ where
         }
         WindowMode::Fullscreen => {
             builder = builder.with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+        }
+        WindowMode::Maximized => {
+            builder = builder.with_maximized(true);
         }
     }
 
