@@ -479,9 +479,27 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
-        let (clipped_primitives, screen_descriptor) =
-            self.gui
-                .render(&self.device, &self.queue, &self.window, &mut encoder, gui);
+        // Pass the *actual* render target dimensions to the GUI renderer
+        // so its scissor rects (built from screen_descriptor.size_in_pixels)
+        // are guaranteed to fit inside the render target. Using
+        // window.inner_size() here would race with monitor-switch DPI changes
+        // where `inner_size()` updates before we've reconfigured the surface,
+        // causing wgpu validation errors of the form:
+        //   set_scissor_rect Scissor Rect{...1600x902...} is not contained
+        //   in the render target Extent3d {800,451,...}
+        // We read the size from the just-acquired surface texture itself,
+        // which is the unambiguous source of truth for the render target
+        // extent regardless of whether `self.config` or `window.inner_size()`
+        // are momentarily out of sync. See gui.rs for further detail.
+        let surface_size = [output.texture.width(), output.texture.height()];
+        let (clipped_primitives, screen_descriptor) = self.gui.render(
+            &self.device,
+            &self.queue,
+            &self.window,
+            surface_size,
+            &mut encoder,
+            gui,
+        );
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
