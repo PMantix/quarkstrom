@@ -9,7 +9,7 @@ use bytemuck::{Pod, Zeroable};
 use crate::gui::GuiHandler;
 use ultraviolet::Vec2;
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
+    dpi::{LogicalSize, PhysicalPosition},
     event::*,
     event_loop::{ControlFlow, EventLoopBuilder},
     window::{Window, WindowBuilder},
@@ -637,15 +637,21 @@ where
 
     match config.window_mode {
         WindowMode::Windowed(width, height) => {
-            //Set window size
-            builder = builder.with_inner_size(PhysicalSize::new(width, height));
+            // Use logical pixels so the window appears the same size to the
+            // user across DPI scales (1× PC vs 2× Retina). On a 2× display
+            // PhysicalSize(1600, 900) renders at half the apparent size.
+            builder = builder.with_inner_size(LogicalSize::new(width as f64, height as f64));
 
-            //If a primary monitor can be found, position the window in the middle
+            // Center the window — convert logical → physical via the monitor's
+            // scale factor since monitor.size() reports physical pixels.
             if let Some(monitor) = event_loop.primary_monitor() {
-                let size = monitor.size();
+                let monitor_size = monitor.size();
+                let scale = monitor.scale_factor();
+                let physical_w = (width as f64 * scale) as i32;
+                let physical_h = (height as f64 * scale) as i32;
                 let position = PhysicalPosition::new(
-                    (size.width - width) as i32 / 2,
-                    (size.height - height) as i32 / 2,
+                    (monitor_size.width as i32 - physical_w) / 2,
+                    (monitor_size.height as i32 - physical_h) / 2,
                 );
                 builder = builder.with_position(position);
             }
